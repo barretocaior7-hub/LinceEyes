@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HealthTech - Cadastro Biométrico</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script defer src="/js/cadastro.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h2>Cadastro Biométrico</h2>
+    <p>Posicione seu rosto em frente à câmera e preencha os dados.</p>
+
+    <div class="video-wrapper">
+      <video id="webcam" autoplay muted playsinline></video>
+    </div>
+
+    <form id="register-form">
+      <div class="form-group">
+        <label for="employeeId">ID do Funcionário:</label>
+        <input type="text" id="employeeId" required placeholder="Ex: LAB-9082">
+      </div>
+      <div class="form-group">
+        <label for="name">Nome Completo:</label>
+        <input type="text" id="name" required placeholder="Ex: Dra. Ana Souza">
+      </div>
+      <button type="submit" id="btn-register" disabled>Carregando Modelos IA...</button>
+    </form>
+
+    <div id="status" class="status-msg"></div>
+
+    <div class="nav-links">
+      <a href="/">Início</a>
+      <a href="/login.html">Ir para Autenticação</a>
+    </div>
+  </div>
+</body>
+</html>

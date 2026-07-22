@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HealthTech - Controle de Acesso Biométrico</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script defer src="/js/login.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h2>Acesso ao Laboratório</h2>
+    <p>Olhe para a câmera para verificação de acesso.</p>
+
+    <div class="video-wrapper" id="canvas-container">
+      <video id="webcam" autoplay muted playsinline></video>
+    </div>
+
+    <div id="status" class="status-msg">Iniciando sistema...</div>
+
+    <div class="nav-links">
+      <a href="/cadastro.html">Novo Cadastro Biométrico</a>
+    </div>
+  </div>
+</body>
+</html>
