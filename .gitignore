@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/biometrics.db
+.DS_Store
+npm-debug.log
+build/
+dist/

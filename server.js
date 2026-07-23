@@ -1,37 +1,14 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = 'healthtech_segredo_super_seguro_rh_2026';
 
-// Configuração do Banco de Dados SQLite
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'biometrics.db');
-
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-const db = new sqlite3.Database(DB_PATH);
-
-// Tabela de usuários para face-api.js
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employee_code TEXT UNIQUE,
-      name TEXT NOT NULL,
-      cargo TEXT NOT NULL,
-      setor TEXT NOT NULL,
-      descriptor TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-});
+const supabase = require('./lib/supabase');
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
@@ -66,49 +43,77 @@ app.post('/api/auth/login-rh', (req, res) => {
 });
 
 // Rota de Cadastro de Biometria
-app.post('/api/register', authorizeRH, (req, res) => {
+app.post('/api/register', authorizeRH, async (req, res) => {
   const { name, cargo, setor, descriptor } = req.body;
 
   if (!name || !cargo || !setor || !descriptor) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios.' });
   }
 
-  const descriptorJson = JSON.stringify(descriptor);
-  const insertSql = `INSERT INTO users (name, cargo, setor, descriptor) VALUES (?, ?, ?, ?)`;
+  try {
+    const descriptorJson = typeof descriptor === 'string' ? descriptor : JSON.stringify(descriptor);
 
-  db.run(insertSql, [name, cargo, setor, descriptorJson], function (err) {
-    if (err) return res.status(500).json({ error: 'Erro ao salvar no banco.' });
+    // Inserir no Supabase (assume tabela `users` já criada no Supabase com colunas compatíveis)
+    const { data, error: insertError } = await supabase
+      .from('users')
+      .insert([{ name, cargo, setor, descriptor: descriptorJson }])
+      .select();
 
-    const insertedId = this.lastID;
+    if (insertError) {
+      console.error('Supabase insert error:', insertError);
+      return res.status(500).json({ error: 'Erro ao salvar no banco (Supabase).' });
+    }
+
+    const inserted = Array.isArray(data) ? data[0] : data;
+    const insertedId = inserted && inserted.id;
     const employeeCode = `EMP-${String(insertedId).padStart(4, '0')}`;
 
-    db.run(`UPDATE users SET employee_code = ? WHERE id = ?`, [employeeCode, insertedId], (updateErr) => {
-      if (updateErr) return res.status(500).json({ error: 'Erro ao gerar código do colaborador.' });
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ employee_code: employeeCode })
+      .eq('id', insertedId);
 
-      return res.status(201).json({
-        message: 'Cadastrado com sucesso!',
-        employee: { id: insertedId, employeeCode, name, cargo, setor }
-      });
+    if (updateError) {
+      console.error('Supabase update error:', updateError);
+      return res.status(500).json({ error: 'Erro ao gerar código do colaborador.' });
+    }
+
+    return res.status(201).json({
+      message: 'Cadastrado com sucesso!',
+      employee: { id: insertedId, employeeCode, name, cargo, setor }
     });
-  });
+  } catch (err) {
+    console.error('Register error:', err);
+    return res.status(500).json({ error: 'Erro interno no servidor.' });
+  }
 });
 
 // Rota de Consulta de Usuários para o Login
-app.get('/api/users', (req, res) => {
-  db.all(`SELECT id, employee_code as employeeCode, name, cargo, setor, descriptor FROM users`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'Erro ao buscar dados.' });
+app.get('/api/users', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, employee_code, name, cargo, setor, descriptor');
 
-    const users = rows.map(u => ({
+    if (error) {
+      console.error('Supabase select error:', error);
+      return res.status(500).json({ error: 'Erro ao buscar dados.' });
+    }
+
+    const users = (data || []).map(u => ({
       id: u.id,
-      employeeCode: u.employeeCode,
+      employeeCode: u.employee_code,
       name: u.name,
       cargo: u.cargo,
       setor: u.setor,
-      descriptor: JSON.parse(u.descriptor)
+      descriptor: typeof u.descriptor === 'string' ? JSON.parse(u.descriptor) : u.descriptor
     }));
 
     return res.json(users);
-  });
+  } catch (err) {
+    console.error('Users fetch error:', err);
+    return res.status(500).json({ error: 'Erro interno no servidor.' });
+  }
 });
 
 app.listen(PORT, () => {
