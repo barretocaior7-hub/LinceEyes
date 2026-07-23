@@ -1,10 +1,7 @@
-const video = document.getElementById('webcam');
-const statusDiv = document.getElementById('status');
-
-let faceLandmarker = null;
-let registeredUsers = [];
+const video = document.getElementById("webcam");
+const statusDiv = document.getElementById("status");
+let faceMatcher = null;
 let isAuthenticating = false;
-let lastVideoTime = -1;
 
 function showStatus(message, type) {
   if (statusDiv) {
@@ -13,114 +10,99 @@ function showStatus(message, type) {
   }
 }
 
-function calculate3DDistance(descA, descB) {
-  if (!descA || !descB || descA.length !== descB.length) return 999;
-  let sum = 0;
-  for (let i = 0; i < descA.length; i++) {
-    const diff = descA[i] - descB[i];
-    sum += diff * diff;
-  }
-  return Math.sqrt(sum);
-}
-
 async function init() {
-  showStatus('A procurar colaboradores cadastrados...', 'info');
-  
+  showStatus("Carregando modelos de reconhecimento facial...", "info");
   try {
-    const usersResponse = await fetch('/api/users');
-    if (!usersResponse.ok) throw new Error('Falha ao conectar à API.');
-    
-    registeredUsers = await usersResponse.json();
+    const MODEL_URL =
+      "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
 
-    if (!registeredUsers || registeredUsers.length === 0) {
-      showStatus('Nenhum colaborador cadastrado. Cadastre um usuário primeiro no Painel RH.', 'error');
+    // Carrega modelos do face-api e lista de usuários
+    const [, usersResponse] = await Promise.all([
+      Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]),
+      fetch("/api/users"),
+    ]);
+
+    const users = await usersResponse.json();
+
+    if (!users || users.length === 0) {
+      showStatus("Nenhum colaborador cadastrado no banco de dados.", "error");
       return;
     }
 
-    const FaceLandmarker = window.vision?.FaceLandmarker || window.FaceLandmarker;
-    const FilesetResolver = window.vision?.FilesetResolver || window.FilesetResolver;
-
-    if (!FaceLandmarker || !FilesetResolver) {
-      throw new Error('A biblioteca MediaPipe ainda não foi carregada no navegador.');
-    }
-
-    const filesetResolver = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-    );
-
-    faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      numFaces: 1
+    // Prepara os descritores
+    const labeledDescriptors = users.map((user) => {
+      const floatDescriptor = new Float32Array(Object.values(user.descriptor));
+      return new faceapi.LabeledFaceDescriptors(user.name, [floatDescriptor]);
     });
 
-    showStatus('Modelo 3D pronto! A ligar a câmara...', 'info');
-    startCamera();
+    faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
+
+    showStatus("Modelos prontos. Iniciando câmera...", "info");
+    startVideo();
   } catch (err) {
-    showStatus('Erro na inicialização: ' + err.message, 'error');
+    showStatus("Erro ao inicializar: " + err.message, "error");
   }
 }
 
-async function startCamera() {
+async function startVideo() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
     video.srcObject = stream;
-    video.addEventListener("loadeddata", processLoginFrame);
   } catch (err) {
-    showStatus('Erro ao aceder à câmara.', 'error');
+    showStatus("Erro ao acessar a câmera.", "error");
   }
 }
 
-async function processLoginFrame() {
-  if (isAuthenticating || !faceLandmarker) return;
+video.addEventListener("play", () => {
+  const displaySize = {
+    width: video.width || 640,
+    height: video.height || 480,
+  };
 
-  if (video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const results = faceLandmarker.detectForVideo(video, performance.now());
+  const interval = setInterval(async () => {
+    if (isAuthenticating) return;
 
-    if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-      const landmarks = results.faceLandmarks[0];
+    const detections = await faceapi
+      .detectAllFaces(video)
+      .withFaceLandmarks()
+      .withFaceDescriptors();
 
-      // 1. Antispoofing / Vivacidade 3D
-      const validation = MediaPipe3DLiveness.validate3DDepth(landmarks);
+    if (detections.length > 0) {
+      const resizedDetections = faceapi.resizeResults(detections, displaySize);
 
-      if (!validation.is3D) {
-        showStatus('🔒 Acesso Negado: Foto/Tela plana detectada!', 'error');
-      } else {
-        // 2. Reconhecimento
-        const currentDescriptor = MediaPipe3DLiveness.generateDescriptor(landmarks);
-        let bestMatch = null;
-        let minDistance = 0.25; // Tolerância de comparação
+      for (const detection of resizedDetections) {
+        const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
 
-        registeredUsers.forEach(user => {
-          const dist = calculate3DDistance(currentDescriptor, user.descriptor);
-          if (dist < minDistance) {
-            minDistance = dist;
-            bestMatch = user;
-          }
-        });
-
-        if (bestMatch) {
+        if (bestMatch.label !== "unknown") {
           isAuthenticating = true;
-          showStatus(`✅ Autenticado! Bem-vindo(a), ${bestMatch.name}. A redirecionar...`, 'success');
-          
+          clearInterval(interval);
+
+          // Salva uma flag no navegador indicando que o usuário passou na biometria
+          localStorage.setItem("user_authenticated", "true");
+          localStorage.setItem("user_name", bestMatch.label);
+
+          showStatus(
+            `Acesso Permitido! Bem-vindo(a), ${bestMatch.label}. Redirecionando...`,
+            "success",
+          );
+
+          // Redireciona para o Painel Secreto (e não para o cadastro)
           setTimeout(() => {
-            window.location.href = '/painel-secreto';
+            window.location.href = "/painel-secreto";
           }, 1200);
-          return;
+          break;
         } else {
-          showStatus('Rosto autêntico 3D, mas não cadastrado no sistema.', 'error');
+          showStatus("Rosto não reconhecido. Acesso negado.", "error");
         }
       }
     } else {
-      showStatus('Aguardando rosto no enquadramento...', 'info');
+      showStatus("Aguardando detecção de rosto...", "info");
     }
-  }
-
-  requestAnimationFrame(processLoginFrame);
-}
+  }, 400);
+});
 
 init();

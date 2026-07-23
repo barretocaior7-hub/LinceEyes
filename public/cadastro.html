@@ -3,12 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HealthTech - Cadastro 3D</title>
+  <title>HealthTech - Cadastro (RH)</title>
   <link rel="stylesheet" href="/css/style.css">
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js" crossorigin="anonymous"></script>
-
-  <script defer src="/js/liveness.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
   <script defer src="/js/cadastro.js"></script>
 </head>
 <body>
@@ -17,50 +15,44 @@
 
     <div id="rh-auth-box" style="margin-bottom: 1.5rem; background: #0f172a; padding: 1.2rem; border-radius: 8px;">
       <h3 style="color: #fff;">🔒 Acesso Restrito ao RH</h3>
-      <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 1rem;">Digite as credenciais do operador para liberar o cadastro biométrico.</p>
-      
       <form id="rh-login-form">
         <div class="form-group">
           <label for="rhUser">Usuário do RH:</label>
-          <input type="text" id="rhUser" required placeholder="Ex: admin_rh" autocomplete="username">
+          <input type="text" id="rhUser" required placeholder="admin_rh">
         </div>
         <div class="form-group">
           <label for="rhPass">Senha do RH:</label>
-          <input type="password" id="rhPass" required placeholder="Senha do RH" autocomplete="current-password">
+          <input type="password" id="rhPass" required placeholder="Senha do RH">
         </div>
-        <button type="submit" id="btn-login-rh">Autenticar Operador RH</button>
+        <button type="submit">Autenticar Operador RH</button>
       </form>
     </div>
 
     <div id="registration-section" style="display: none;">
-      <div class="video-wrapper" id="canvas-container">
-        <video id="webcam" autoplay muted playsinline></video>
-      </div>
-
-      <div id="liveness-badge" class="status-msg info">
-        Aguardando inicialização do detector 3D...
+      <div class="video-wrapper">
+        <video id="webcam" autoplay muted playsinline width="640" height="480"></video>
       </div>
 
       <form id="register-form">
         <div class="form-group">
-          <label for="name">Nome Completo do Colaborador:</label>
-          <input type="text" id="name" required placeholder="Ex: Dr. Carlos Eduardo">
+          <label for="name">Nome Completo:</label>
+          <input type="text" id="name" required placeholder="Ex: Carlos Silva">
         </div>
         <div class="form-group">
-          <label for="cargo">Cargo / Função:</label>
-          <input type="text" id="cargo" required placeholder="Ex: Pesquisador Sênior">
+          <label for="cargo">Cargo:</label>
+          <input type="text" id="cargo" required placeholder="Ex: Pesquisador">
         </div>
         <div class="form-group">
-          <label for="setor">Setor / Laboratório:</label>
+          <label for="setor">Setor:</label>
           <input type="text" id="setor" required placeholder="Ex: Imunologia">
         </div>
 
-        <button type="submit" id="btn-register" disabled>Aguardando Validação 3D...</button>
+        <button type="submit" id="btn-register">Salvar Cadastro Biométrico</button>
       </form>
     </div>
 
     <div id="status" class="status-msg"></div>
-    <div class="nav-links"><a href="/">Voltar ao Início</a></div>
+    <div class="nav-links"><a href="/login">Voltar ao Login</a></div>
   </div>
 </body>
 </html>
